@@ -1,4 +1,4 @@
-module github.com/WorldOfLinuxDC/AprilFoolsBot
+module github.com/WorldOfLinuxBR/AprilFoolsBot
 
 go 1.19
 
