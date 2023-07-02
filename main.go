@@ -10,44 +10,25 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func init() {
-	if err := godotenv.Load(); err != nil {
-		log.Info("Error loading .env file")
-	}
-	log.Println(".env file loaded")
-}
-
 var gOwnerId string
 var gGuildID string
 var coll *mongo.Collection
 
 func main() {
-	mongoURI := os.Getenv("MONGO_URI")
-	dcToken := os.Getenv("DISCORD_TOKEN")
-	GuildID := os.Getenv("GUILD_ID")
-	OwnerID := os.Getenv("OWNER_ID")
 
-	if GuildID == "" || OwnerID == "" {
-		log.Fatal("You must set 'GUILD_ID' and 'OWNER_ID' environmental variables.")
+	Env, err := GetEnv()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	gOwnerId = OwnerID
-	gGuildID = GuildID
-
-	if mongoURI == "" {
-		log.Fatal("You must set your 'MONGODB_URI' environmental variable. See\n\t https://www.mongodb.com/docs/drivers/go/current/usage-examples/#environment-variable")
-	}
-
-	if dcToken == "" {
-		log.Fatal("You must set your 'DISCORD_TOKEN' environmental variable.")
-	}
+	gOwnerId = Env.OwnerID
+	gGuildID = Env.GuildID
 
 	serverAPIOptions := options.ServerAPI(options.ServerAPIVersion1)
 
@@ -55,7 +36,7 @@ func main() {
 	defer cancel()
 
 	MongoDB, err := mongo.Connect(ctx, options.Client().
-		ApplyURI(mongoURI).
+		ApplyURI(Env.MongoURI).
 		SetServerAPIOptions(serverAPIOptions))
 	if err != nil {
 		log.Fatal(err)
@@ -71,7 +52,7 @@ func main() {
 
 	coll = MongoDB.Database("Discord").Collection("Users")
 
-	discord, err := discordgo.New("Bot " + dcToken)
+	discord, err := discordgo.New("Bot " + Env.DCToken)
 	if err != nil {
 		log.Fatal("Discord: ", err)
 	}
@@ -179,9 +160,9 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		defer cur.Close(context.Background())
 
 		var count int
-        msg, _ := s.ChannelMessageSend(m.ChannelID, ":warning: **status**: 0 usernames restaurados.")
+		msg, _ := s.ChannelMessageSend(m.ChannelID, ":warning: **status**: 0 usernames restaurados.")
 		for cur.Next(context.Background()) {
-      s.ChannelMessageEdit(msg.ChannelID,msg.ID, fmt.Sprintf(":warning: **status**: %d usernames restaurados.", count))
+			s.ChannelMessageEdit(msg.ChannelID, msg.ID, fmt.Sprintf(":warning: **status**: %d usernames restaurados.", count))
 			var user struct {
 				UID      string `bson:"uid"`
 				Username string `bson:"username"`
