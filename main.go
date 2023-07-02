@@ -12,47 +12,41 @@ import (
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var DB Database
+var Envvars *Env
 var gOwnerId string
 var gGuildID string
-var coll *mongo.Collection
 
 func main() {
-
-	Env, err := GetEnv()
+	var err error
+	Envvars, err = GetEnv()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	gOwnerId = Env.OwnerID
-	gGuildID = Env.GuildID
+	gOwnerId = Envvars.OwnerID
+	gGuildID = Envvars.GuildID
 
-	serverAPIOptions := options.ServerAPI(options.ServerAPIVersion1)
+
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	MongoDB, err := mongo.Connect(ctx, options.Client().
-		ApplyURI(Env.MongoURI).
-		SetServerAPIOptions(serverAPIOptions))
-	if err != nil {
-		log.Fatal(err)
+	if err := DB.Connect(ctx); err != nil {
+		log.Fatal("Error connecting to the database.")
 	}
 	fmt.Println("Connected to MongoDB!")
 
 	defer func() {
-		if err := MongoDB.Disconnect(ctx); err != nil {
-			log.Fatal(err)
-		}
+		DB.Disconnect(ctx)
 		fmt.Println("\nDisconnected from MongoDB.")
 	}()
 
-	coll = MongoDB.Database("Discord").Collection("Users")
+	DB.SwitchTo("Discord", "Users")
 
-	discord, err := discordgo.New("Bot " + Env.DCToken)
+	discord, err := discordgo.New("Bot " + Envvars.DCToken)
 	if err != nil {
 		log.Fatal("Discord: ", err)
 	}
@@ -93,16 +87,16 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 			oldname := name
 
-			// Check if the user's name already contains "@Windows 12"
-			if strings.Contains(name, "@Windows 12") {
+			// Check if the user's name already contains "@(Whatever the user has set)"
+			if strings.Contains(name, "@" + Envvars.AppendName) {
 				continue
 			}
 
 			// Check if the user's name contains "@"
 			if strings.Contains(name, "@") {
-				name = strings.Split(name, "@")[0] + "@Windows 12"
+				name = strings.Split(name, "@")[0] + "@" + Envvars.AppendName
 			} else {
-				name = name + "@Windows 12"
+				name = name + "@" + Envvars.AppendName
 			}
 
 			// Update the user's nickname
@@ -118,7 +112,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if m.Content == "!backupUsernames" && m.Author.ID == gOwnerId {
-		res, err := coll.DeleteMany(context.TODO(), bson.M{})
+		res, err := DB.Collection.DeleteMany(context.TODO(), bson.M{})
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error deleting collection data: %v", err))
 		}
@@ -137,7 +131,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				name = v.Nick
 
 			}
-			_, err := coll.InsertOne(context.TODO(), bson.M{
+			_, err := DB.Collection.InsertOne(context.TODO(), bson.M{
 				"uid":      v.User.ID,
 				"username": name,
 			})
@@ -152,7 +146,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if m.Content == "!undoAprilFools" && m.Author.ID == gOwnerId {
 		// Restore usernames from the database
-		cur, err := coll.Find(context.Background(), bson.M{})
+		cur, err := DB.Collection.Find(context.Background(), bson.M{})
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Error finding collection data: %v", err))
 			return
