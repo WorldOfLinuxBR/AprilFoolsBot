@@ -3,7 +3,7 @@ module github.com/WorldOfLinuxBR/AprilFoolsBot
 go 1.19
 
 require (
-	github.com/bwmarrin/discordgo v0.27.1
+	github.com/bwmarrin/discordgo v0.28.1
 	github.com/joho/godotenv v1.5.1
 	github.com/sirupsen/logrus v1.9.0
 	go.mongodb.org/mongo-driver v1.17.3
